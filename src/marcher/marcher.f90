@@ -9,10 +9,10 @@ module class_ode_marcher
 
    type, public ::  ode_marcher
       integer :: dim
-      real, allocatable :: y0(:)
-      real, allocatable :: yerr(:)
-      real, allocatable :: dydt_in(:)
-      real, allocatable :: dydt_out(:)
+      real, pointer, contiguous :: y0(:)
+      real, pointer, contiguous :: yerr(:)
+      real, pointer, contiguous :: dydt_in(:)
+      real, pointer, contiguous :: dydt_out(:)
 
       integer :: count
       integer :: failed_steps
@@ -53,15 +53,15 @@ contains
       real, intent(inout) :: t
       real, intent(in) :: t1
       real, intent(inout) :: h
-      real, intent(inout) :: y(:)
+      real, pointer, intent(inout) :: y(:)
 
       logical :: final_step
       integer :: step_status
       real :: h0, t0, dt, h_old, t_curr, t_next
-      
+
       ! h0 zmienna na ktorej operujemy, ewentualna zmiane kroku
-      ! czyli zmiennej h dokonujemy na koncu subrutyny 
-      h0=h 
+      ! czyli zmiennej h dokonujemy na koncu subrutyny
+      h0=h
       t0=t
       dt=t1-t0
 
@@ -70,36 +70,36 @@ contains
 
       ! Sprawdzamy zgodnosc wymiarow marchera oraz steppera
       if ( m % dim /= s % dim ) then
-         m % status = 0 ! status bledu
+         m % status = -1 ! status bledu
          return
       end if
 
       ! Sprawdzamy zgodnosc kierunku calkowania
       if ( (dt<0.0 .and. h0>0.0) .or. (dt>0.0 .and. h0<0.0) ) then
-         m % status = 0 ! status bledu
+         m % status = -2 ! status bledu
          return
       end if
 
-      ! Jezeli calkujemy ze zmiennym krokiem czyli stepper 
+      ! Jezeli calkujemy ze zmiennym krokiem czyli stepper
       ! wylicza blad kroku oraz zostala podana metoda kontrolujaca
       ! krok to wykonujemy kopie wejsciowego wektora y do struktury
       ! matchera m % y0
-      if ( s % gives_estimated_yerr == .true. .and. present( c ) ) then
+      if ( s % gives_estimated_yerr .and. present( c ) ) then
          m % y0 = y
       end if
-      
+
       ! Wyliczamy pochodne jezeli metoda moze z nich skorzystac
-      if ( s % can_use_dydt_in == .true. ) then
+      if ( s % can_use_dydt_in ) then
          call sys % fun( t, y, m % dydt_in, sys % params, sys % status )
          if ( sys % status /= 1 ) then
             m % status = sys % status
             return
          end if
       end if
-      
+
       ! Wykonujemy probny krok
 
-      ! Sprawdzenie czy krok jest ostatnim krokiem 
+      ! Sprawdzenie czy krok jest ostatnim krokiem
       ! (w przypadku calkowania do przodu i do tylu)
 100   if ( ( dt>=0.0 .and. h0>dt ).or.( dt<0.0 .and. h0<dt ) ) then
          h0=dt
@@ -107,9 +107,9 @@ contains
       else
          final_step=.false.
       end if
-      
+
       ! Uruchamiamy stepper z uzyciem dydt_in
-      if ( s % can_use_dydt_in == .true. ) then
+      if ( s % can_use_dydt_in ) then
          ! Kopiujemy wektor y na wypadek wystapienia bledu
          m % y0 = y
          call s % apply( s % dim, t0, h0, y, m % yerr, m % dydt_in, m % dydt_out, sys, s % status )
@@ -120,16 +120,16 @@ contains
 
       ! Sprawdzamy czy stepper wykonal sie poprawnie
       if ( s % status /= 1 ) then
-         ! jezeli wystapil blad przekazujemy taki sam 
+         ! jezeli wystapil blad przekazujemy taki sam
          ! status bledu do statusu marchera aby mozna go
          ! bylo z zewnatrz odczytac
-         m % status = s % status 
+         m % status = s % status
          h = h0 ! zwracamy krok przy jakim pojawil sie blad
-         t = t0 ! przywracamy wartosc t podana na wejsciu 
+         t = t0 ! przywracamy wartosc t podana na wejsciu
          return
       end if
-      
-      ! Jezeli stepper nie spowodowal zadnych bledow zwiekszamy 
+
+      ! Jezeli stepper nie spowodowal zadnych bledow zwiekszamy
       ! licznik m % count i zapisujemy krok w m % last_step
       m % count = m % count + 1
       m % last_step = h0
@@ -145,7 +145,7 @@ contains
 
       ! Jezeli metoda na to pozwala oraz zostal podany step control
       ! uzywamy metody z adaptywnym krokiem
-      if ( s % gives_estimated_yerr == .true. .and. present( c ) ) then
+      if ( s % gives_estimated_yerr .and. present( c ) ) then
          ! present( c ) zwraca .true. jesli zostal podany step control
          h_old = h0 ! zapamietujemy wielkosc kroku
          call c % apply ( s, y, m % yerr, m % dydt_out, h0 )

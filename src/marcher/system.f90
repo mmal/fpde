@@ -2,22 +2,22 @@
 module class_ode_system
 
    public :: fun_interface, jac_interface
-   
+
    !! interfaces
    abstract interface
       subroutine fun_interface( t, y, dydt, params, status )
          real, intent(in) :: t
-         real, intent(in) :: y(:)
-         real, intent(out) :: dydt(:)
+         real, pointer, intent(in) :: y(:)
+         real, pointer, intent(out) :: dydt(:)
          class(*) :: params
          integer, optional :: status
       end subroutine fun_interface
 
       subroutine jac_interface( t, y, dfdy, dfdt, params, status )
          real, intent(in) :: t
-         real, intent(in) :: y(:)
-         real, intent(out) :: dfdy(:)
-         real, intent(out) :: dfdt(:)
+         real, pointer, intent(in) :: y(:)
+         real, pointer, intent(out) :: dfdy(:)
+         real, pointer, intent(out) :: dfdt(:)
          class(*) :: params
          integer, optional :: status
       end subroutine jac_interface
@@ -31,20 +31,27 @@ module class_ode_system
       class(*), pointer :: params
       integer :: status
    end type ode_system
-   
+
 
 contains
 
    !! konstruktor
    subroutine ode_system_init( sys, fun, jac, dim, params )
-      procedure(fun_interface) :: fun
-      procedure(jac_interface), optional :: jac
+      procedure(fun_interface), pointer, intent(in) :: fun
+      procedure(jac_interface), pointer, intent(in), optional :: jac
       integer :: dim
-      class (*),target :: params
+      class (*), target :: params
 
       type(ode_system) :: sys
-      sys % fun => fun
-      if ( present( jac ) ) then
+
+      if( associated( fun ) ) then
+         sys % fun => fun
+      else
+         ! @todo report error!
+         print *, "nie ma funkcji w ode_system_init"
+      end if
+
+      if ( present( jac ) .and. associated( jac )) then
          sys % jac => jac
       else
          sys % jac => null()

@@ -10,11 +10,12 @@ module class_mesh
      ! private
      ! TODO: add something like
      character(len=300)    :: name
-     integer              :: nx, nf, maxrk
-     real, allocatable    :: x(:)
-     real, allocatable    :: f(:,:)
-     real, allocatable    :: df(:,:,:)
-     logical, private, allocatable :: df_calculated(:)
+     integer               :: nx, nf, maxrk
+     real, contiguous, pointer         :: x(:)
+     real, contiguous, pointer         :: f(:,:)
+     real, contiguous, pointer         :: df(:,:,:)
+     real, contiguous, pointer         :: dx(:)
+     logical, private, contiguous, pointer :: df_calculated(:)
    contains
      ! obligatory
      procedure :: derivative
@@ -24,6 +25,7 @@ module class_mesh
      procedure :: init
      procedure :: free
      procedure :: info
+     procedure :: integrate
 
      ! use only, not to be overloaded
      procedure, non_overridable :: print_by_index
@@ -36,15 +38,8 @@ module class_mesh
      procedure :: to_vector
      procedure :: from_vector
      procedure :: fill_for_debug
+     procedure :: calculate_spacings
   end type mesh
-
-  ! interface
-  !    subroutine free( m )
-  !      import :: mesh
-  !      class(mesh), intent(inout) :: m
-  !    end subroutine free
-  ! end interface
-
 
 contains
 
@@ -65,6 +60,9 @@ contains
     allocate( m % x( nx ) )
     allocate( m % f( nx, nf ) )
     allocate( m % df( nx, nf, maxrk ) )
+    ! allocate memory for mesh spacing
+    allocate( m % dx(nx) )
+
   end subroutine init
 
   subroutine info(m)
@@ -79,19 +77,35 @@ contains
   subroutine free( m )
     class(mesh), intent(inout) :: m
 
-    deallocate( m % x )
-    deallocate( m % f )
-    deallocate( m % df )
-    deallocate( m % df_calculated )
+    if( associated( m % x ) ) then
+       deallocate( m % x )
+    end if
+
+    if( associated( m % f ) ) then
+       deallocate( m % f )
+    end if
+
+    if( associated( m % df ) ) then
+       deallocate( m % df )
+    end if
+
+    if( associated( m % df_calculated ) ) then
+       deallocate( m % df_calculated )
+    end if
+
+    if( associated( m % dx ) ) then
+       deallocate( m % dx )
+    end if
+
   end subroutine free
 
 
-  ! calculates k-th derivative of j-th function at i-th point
-  function derivative( m, i, j, k )
+  ! calculates i-th derivative of j-th function at k-th point
+  function derivative( m, k, j, i ) result(d)
     class(mesh), intent(inout) :: m
     integer, intent(in) :: i,j,k
-    real :: derivative
-    derivative = 0
+    real :: d
+    d = 0.
 
     stop 'method "derivative" is not overloaded'
 
@@ -226,6 +240,37 @@ contains
     end do
 
   end subroutine print_by_index
+
+  function integrate( m, f ) result(r)
+    class(mesh) :: m
+    real :: r
+    real, intent(in) :: f(:)
+    real, pointer :: dx(:), x(:)
+    integer :: nx
+
+    dx => m % dx
+
+
+    call m % calculate_spacings
+    ! integrate f wrt measure dx
+    r = sum(f*dx)
+
+  end function integrate
+
+  subroutine calculate_spacings(m)
+    class(mesh) :: m
+    real, pointer :: dx(:), x(:)
+    integer :: nx
+    dx => m % dx
+    x  => m % x
+    nx = m % nx
+
+    ! calculate mesh spacing
+    dx(2:nx-1) = (x(3:nx) - x(1:nx-2))/2.
+    dx(1) = (x(2)-x(1))/2.
+    dx(nx) = (x(nx)-x(nx-1))/2.
+  end subroutine calculate_spacings
+
 
 end module class_mesh
 
